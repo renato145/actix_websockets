@@ -11,6 +11,7 @@ impl Actor for MyWs {
 
 /// Handler for ws::Message message
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWs {
+    #[tracing::instrument(name = "Handling web socket", skip(self, ctx))]
     fn handle(&mut self, item: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
         match item {
             Ok(ws::Message::Ping(msg)) => ctx.pong(&msg),
