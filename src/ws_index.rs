@@ -1,4 +1,4 @@
-use actix::{Actor, StreamHandler};
+use actix::{Actor, ActorContext, StreamHandler};
 use actix_web::{web, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
 
@@ -16,11 +16,16 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWs {
             Ok(ws::Message::Ping(msg)) => ctx.pong(&msg),
             Ok(ws::Message::Text(text)) => ctx.text(text),
             Ok(ws::Message::Binary(bin)) => ctx.binary(bin),
-            _ => (),
+            Ok(ws::Message::Close(reason)) => {
+                ctx.close(reason);
+                ctx.stop();
+            }
+            _ => ctx.stop(),
         }
     }
 }
 
+#[tracing::instrument(name = "Starting web socket", skip(req, stream))]
 pub async fn ws_index(
     req: HttpRequest,
     stream: web::Payload,
