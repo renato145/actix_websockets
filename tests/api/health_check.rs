@@ -3,7 +3,7 @@ use awc::Client;
 use futures::{SinkExt, StreamExt};
 
 #[actix_rt::test]
-async fn health_check_works() {
+async fn client_receives_heartbeat_every_x_secs() {
     // Arrange
     let app = spawn_app().await;
 

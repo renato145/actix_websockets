@@ -1,10 +1,26 @@
 use serde::Deserialize;
-use std::convert::{TryFrom, TryInto};
+use serde_with::{serde_as, DurationMilliSeconds};
+use std::{
+    convert::{TryFrom, TryInto},
+    time::Duration,
+};
 
-#[derive(Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Settings {
     pub host: String,
     pub port: u16,
+    pub websocket: WebsocketSettings,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Deserialize)]
+pub struct WebsocketSettings {
+    /// In milliseconds
+    #[serde_as(as = "DurationMilliSeconds<u64>")]
+    pub heartbeat_interval: Duration,
+    /// In milliseconds
+    #[serde_as(as = "DurationMilliSeconds<u64>")]
+    pub client_timeout: Duration,
 }
 
 pub fn get_configuration() -> Result<Settings, config::ConfigError> {

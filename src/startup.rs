@@ -1,5 +1,12 @@
-use crate::{configuration::Settings, ws_index::ws_index};
-use actix_web::{dev::Server, web, App, HttpServer};
+use crate::{
+    configuration::{Settings, WebsocketSettings},
+    ws_index::ws_index,
+};
+use actix_web::{
+    dev::Server,
+    web::{self, Data},
+    App, HttpServer,
+};
 use std::net::TcpListener;
 use tracing_actix_web::TracingLogger;
 
@@ -13,7 +20,7 @@ impl Application {
         let address = format!("{}:{}", configuration.host, configuration.port);
         let listener = TcpListener::bind(&address)?;
         let port = listener.local_addr().unwrap().port();
-        let server = run(listener)?;
+        let server = run(listener, configuration.websocket)?;
         Ok(Self { port, server })
     }
 
@@ -26,11 +33,17 @@ impl Application {
     }
 }
 
-pub fn run(listener: TcpListener) -> Result<Server, std::io::Error> {
+pub fn run(
+    listener: TcpListener,
+    websocket_settings: WebsocketSettings,
+) -> Result<Server, std::io::Error> {
+    tracing::info!("{:#?}", websocket_settings);
+    let websocket_settings = Data::new(websocket_settings);
     let server = HttpServer::new(move || {
         App::new()
             .wrap(TracingLogger::default())
             .route("/ws/", web::get().to(ws_index))
+            .app_data(websocket_settings.clone())
     })
     .listen(listener)?
     .run();
