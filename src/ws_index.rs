@@ -20,12 +20,25 @@ impl MainWebsocket {
     /// Sends ping to client every x seconds.
     /// Also checks heathbeats from client.
     fn hb(&self, ctx: &mut <Self as Actor>::Context) {
-        // ctx.run_interval(dur, f)
+        ctx.run_interval(self.settings.heartbeat_interval, |act, ctx| {
+            // Check client heartbeats
+            if Instant::now().duration_since(act.hb) > act.settings.client_timeout {
+                // heartbeat timed out
+                tracing::info!("Websocket client heartbeat failed, disconnecting.");
+                ctx.stop();
+                return;
+            }
+            ctx.ping(b"");
+        });
     }
 }
 
 impl Actor for MainWebsocket {
     type Context = ws::WebsocketContext<Self>;
+
+    fn started(&mut self, ctx: &mut Self::Context) {
+        self.hb(ctx);
+    }
 }
 
 /// Handler for ws::Message message
@@ -56,6 +69,5 @@ pub async fn ws_index(
         &req,
         stream,
     );
-    tracing::info!("{:?}", resp);
     resp
 }

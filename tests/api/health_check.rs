@@ -8,7 +8,6 @@ async fn client_receives_heartbeat_every_x_secs() {
     let app = spawn_app().await;
 
     // Act
-    // let (response, framed) = Client::new()
     let (response, mut connection) = Client::new()
         .ws(format!("{}/ws/", app.address))
         .connect()
