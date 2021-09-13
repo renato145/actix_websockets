@@ -1,6 +1,6 @@
 use crate::{
     configuration::{Settings, WebsocketSettings},
-    ws_index::ws_index,
+    websocket::route::ws_index,
 };
 use actix_web::{
     dev::Server,
