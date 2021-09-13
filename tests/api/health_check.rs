@@ -89,7 +89,6 @@ async fn client_stays_alive_if_responds_pings() {
     tokio::pin!(sleep);
     let mut disconnected = false;
 
-    // Ping
     loop {
         tokio::select! {
             msg = connection.next() => {

@@ -41,7 +41,6 @@ impl Actor for MainWebsocket {
     }
 }
 
-/// Handler for ws::Message message
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MainWebsocket {
     #[tracing::instrument(name = "Handling web socket", skip(self, ctx))]
     fn handle(&mut self, item: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
