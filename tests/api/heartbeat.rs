@@ -9,7 +9,6 @@ async fn client_receives_heartbeat_every_x_milliseconds() {
     // Arrange
     let app = spawn_app().await;
 
-    // Act
     let (_response, mut connection) = Client::new()
         .ws(format!("{}/ws/", app.address))
         .connect()
@@ -20,6 +19,7 @@ async fn client_receives_heartbeat_every_x_milliseconds() {
     tokio::pin!(sleep);
     let mut count = 0;
 
+    // Act
     loop {
         tokio::select! {
             Some(msg) = connection.next() => {
@@ -42,7 +42,6 @@ async fn client_disconnects_after_x_milliseconds() {
     // Arrange
     let app = spawn_app().await;
 
-    // Act
     let (_response, mut connection) = Client::new()
         .ws(format!("{}/ws/", app.address))
         .connect()
@@ -53,6 +52,7 @@ async fn client_disconnects_after_x_milliseconds() {
     tokio::pin!(sleep);
     let mut disconnected = false;
 
+    // Act
     loop {
         tokio::select! {
             msg = connection.next() => {
@@ -78,7 +78,6 @@ async fn client_stays_alive_if_responds_pings() {
     // Arrange
     let app = spawn_app().await;
 
-    // Act
     let (_response, mut connection) = Client::new()
         .ws(format!("{}/ws/", app.address))
         .connect()
@@ -89,6 +88,7 @@ async fn client_stays_alive_if_responds_pings() {
     tokio::pin!(sleep);
     let mut disconnected = false;
 
+    // Act
     loop {
         tokio::select! {
             msg = connection.next() => {

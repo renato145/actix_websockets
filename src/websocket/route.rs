@@ -42,7 +42,11 @@ impl Actor for MainWebsocket {
 }
 
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MainWebsocket {
-    #[tracing::instrument(name = "Handling websocket message", skip(self, ctx))]
+    #[tracing::instrument(
+        name = "Handling websocket message",
+        skip(self, item, ctx),
+        fields(message=tracing::field::Empty)
+    )]
     fn handle(&mut self, item: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
         let msg = match item {
             Ok(msg) => msg,
@@ -51,6 +55,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MainWebsocket {
                 return;
             }
         };
+        tracing::Span::current().record("message", &tracing::field::debug(&msg));
 
         match msg {
             ws::Message::Ping(msg) => {
@@ -60,13 +65,17 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MainWebsocket {
             ws::Message::Pong(_) => {
                 self.hb = Instant::now();
             }
-            ws::Message::Text(text) => ctx.text(text),
-            ws::Message::Binary(bin) => ctx.binary(bin),
+            ws::Message::Text(text) => {
+                let _msg = text.trim();
+            }
             ws::Message::Close(reason) => {
                 ctx.close(reason);
                 ctx.stop();
             }
-            _ => ctx.stop(),
+            _ => {
+                tracing::info!("Invalid message");
+                ctx.stop();
+            }
         }
     }
 }
