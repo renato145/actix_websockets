@@ -40,7 +40,7 @@ pub fn get_configuration() -> Result<Settings, config::ConfigError> {
 
     // Layer on the environment-specific values.
     settings.merge(
-        config::File::from(configuration_directory.join(environment.as_str())).required(false),
+        config::File::from(configuration_directory.join(environment.as_str())).required(true),
     )?;
 
     // Add in settings from environment variables (with a prefix of APP and '__' as separator)
