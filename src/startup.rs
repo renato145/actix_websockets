@@ -37,7 +37,7 @@ pub fn run(
     listener: TcpListener,
     websocket_settings: WebsocketSettings,
 ) -> Result<Server, std::io::Error> {
-    tracing::info!("{:#?}", websocket_settings);
+    tracing::info!("{:?}", websocket_settings);
     let websocket_settings = Data::new(websocket_settings);
     let server = HttpServer::new(move || {
         App::new()
