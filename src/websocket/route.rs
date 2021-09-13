@@ -1,8 +1,23 @@
+use super::{error::WSError, python_repo::PythonRepoMessage};
 use crate::configuration::WebsocketSettings;
 use actix::{Actor, ActorContext, AsyncContext, StreamHandler};
 use actix_web::{web, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
-use std::time::Instant;
+use std::{str::FromStr, time::Instant};
+
+#[tracing::instrument(name = "Starting web socket", skip(req, stream, websocket_settings))]
+pub async fn ws_index(
+    req: HttpRequest,
+    stream: web::Payload,
+    websocket_settings: web::Data<WebsocketSettings>,
+) -> Result<HttpResponse, actix_web::Error> {
+    let resp = ws::start(
+        MainWebsocket::new(websocket_settings.as_ref()),
+        &req,
+        stream,
+    );
+    resp
+}
 
 struct MainWebsocket {
     hb: Instant,
@@ -30,6 +45,31 @@ impl MainWebsocket {
             }
             ctx.ping(b"");
         });
+    }
+
+    #[tracing::instrument(
+        name = "Processing message",
+        skip(self, ctx),
+        fields(parsed_message=tracing::field::Empty)
+    )]
+    fn process_message(&self, text: &str, ctx: &mut ws::WebsocketContext<MainWebsocket>) {
+        match text.parse::<WSMessage>() {
+            Ok(msg) => {
+                tracing::Span::current().record("parsed_message", &tracing::field::debug(&msg));
+                match msg {
+                    WSMessage::PythonRepo(path) => {
+                        ctx.text(format!(
+                            "Some result should be given here from path {:?}",
+                            path
+                        ));
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::error!("{:?}", e);
+                ctx.text(format!("{}", e));
+            }
+        }
     }
 }
 
@@ -66,7 +106,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MainWebsocket {
                 self.hb = Instant::now();
             }
             ws::Message::Text(text) => {
-                let _msg = text.trim();
+                self.process_message(text.trim(), ctx);
             }
             ws::Message::Close(reason) => {
                 ctx.close(reason);
@@ -80,16 +120,34 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MainWebsocket {
     }
 }
 
-#[tracing::instrument(name = "Starting web socket", skip(req, stream, websocket_settings))]
-pub async fn ws_index(
-    req: HttpRequest,
-    stream: web::Payload,
-    websocket_settings: web::Data<WebsocketSettings>,
-) -> Result<HttpResponse, actix_web::Error> {
-    let resp = ws::start(
-        MainWebsocket::new(websocket_settings.as_ref()),
-        &req,
-        stream,
-    );
-    resp
+/// Messages can be parsed from the form: "/<service>/<command>/<data>"
+#[derive(Debug)]
+pub enum WSMessage {
+    PythonRepo(PythonRepoMessage),
+}
+
+impl FromStr for WSMessage {
+    type Err = WSError;
+
+    fn from_str(msg: &str) -> Result<Self, Self::Err> {
+        let msg_parts = msg.splitn(2, '/').collect::<Vec<_>>();
+        if msg_parts.len() != 2 {
+            return Err(WSError::MsgParseError(anyhow::anyhow!(
+                "Incomplete message: {:?}",
+                msg
+            )));
+        }
+
+        let msg = match msg_parts[0] {
+            "python_repo" => Self::PythonRepo(msg_parts[1].parse()?),
+            invalid_service => {
+                return Err(WSError::MsgParseError(anyhow::anyhow!(
+                    "Invalid service: {:?}",
+                    invalid_service
+                )))
+            }
+        };
+
+        Ok(msg)
+    }
 }

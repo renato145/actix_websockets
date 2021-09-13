@@ -16,6 +16,7 @@ path = "src/main.rs"
 actix-web = "~4.0.0-beta.9"
 actix-web-actors = "~4.0.0-beta.7"
 anyhow = "1"
+thiserror = "1"
 actix = "0.12.0"
 serde = { version = "1.0", features = ["derive"] }
 config = { version = "0.11.0", default-features = false, features = ["yaml"] }

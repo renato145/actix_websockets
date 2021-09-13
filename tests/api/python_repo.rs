@@ -16,7 +16,7 @@ async fn retrieve_python_files_on_valid_path() {
 
     // Act
     connection
-        .send(awc::ws::Message::Text("/python_repo/".into()))
+        .send(awc::ws::Message::Text("python_repo/get_files/some_path".into()))
         .await
         .expect("Failed to send message.");
 
