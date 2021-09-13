@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use actix_websockets::{
     configuration::get_configuration,
     startup::Application,
@@ -33,6 +35,8 @@ pub async fn spawn_app() -> TestApp {
         let mut c = get_configuration().expect("Failed to read configuration.");
         // Port 0 give us a random available port
         c.port = 0;
+        c.websocket.heartbeat_interval = Duration::from_millis(50);
+        c.websocket.client_timeout = Duration::from_millis(250);
         c
     };
 

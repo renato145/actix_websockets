@@ -46,7 +46,13 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MainWebsocket {
     #[tracing::instrument(name = "Handling web socket", skip(self, ctx))]
     fn handle(&mut self, item: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
         match item {
-            Ok(ws::Message::Ping(msg)) => ctx.pong(&msg),
+            Ok(ws::Message::Ping(msg)) => {
+                self.hb = Instant::now();
+                ctx.pong(&msg);
+            }
+            Ok(ws::Message::Pong(_)) => {
+                self.hb = Instant::now();
+            }
             Ok(ws::Message::Text(text)) => ctx.text(text),
             Ok(ws::Message::Binary(bin)) => ctx.binary(bin),
             Ok(ws::Message::Close(reason)) => {
