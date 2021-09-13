@@ -45,17 +45,25 @@ impl Actor for MainWebsocket {
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MainWebsocket {
     #[tracing::instrument(name = "Handling web socket", skip(self, ctx))]
     fn handle(&mut self, item: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
-        match item {
-            Ok(ws::Message::Ping(msg)) => {
+        let msg = match item {
+            Ok(msg) => msg,
+            Err(_) => {
+                ctx.stop();
+                return;
+            }
+        };
+
+        match msg {
+            ws::Message::Ping(msg) => {
                 self.hb = Instant::now();
                 ctx.pong(&msg);
             }
-            Ok(ws::Message::Pong(_)) => {
+            ws::Message::Pong(_) => {
                 self.hb = Instant::now();
             }
-            Ok(ws::Message::Text(text)) => ctx.text(text),
-            Ok(ws::Message::Binary(bin)) => ctx.binary(bin),
-            Ok(ws::Message::Close(reason)) => {
+            ws::Message::Text(text) => ctx.text(text),
+            ws::Message::Binary(bin) => ctx.binary(bin),
+            ws::Message::Close(reason) => {
                 ctx.close(reason);
                 ctx.stop();
             }
