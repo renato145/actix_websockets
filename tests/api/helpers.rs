@@ -1,10 +1,13 @@
 use std::time::Duration;
 
+use actix_web_actors::ws;
 use actix_websockets::{
     configuration::get_configuration,
     startup::Application,
     telemetry::{get_subscriber, init_subscriber},
 };
+use awc::Client;
+use futures::{SinkExt, StreamExt};
 use once_cell::sync::Lazy;
 
 // Ensure that 'tracing' stack is only initialized once using `once_cell`
@@ -24,6 +27,30 @@ static TRACING: Lazy<()> = Lazy::new(|| {
 pub struct TestApp {
     pub address: String,
     pub port: u16,
+}
+
+impl TestApp {
+    pub async fn get_first_result(&self, message: &str) -> serde_json::Value {
+        let (_response, mut connection) = Client::new()
+            .ws(format!("{}/ws/", self.address))
+            .connect()
+            .await
+            .expect("Failed to connect to websocket.");
+
+        connection
+            .send(awc::ws::Message::Text(message.into()))
+            .await
+            .expect("Failed to send message.");
+
+        if let Some(Ok(ws::Frame::Text(msg))) = connection.next().await {
+            let msg =
+                serde_json::from_slice::<serde_json::Value>(&msg).expect("Failed to parse JSON.");
+            tracing::info!("{}", msg);
+            msg
+        } else {
+            panic!("Failed to receive message.");
+        }
+    }
 }
 
 pub async fn spawn_app() -> TestApp {
