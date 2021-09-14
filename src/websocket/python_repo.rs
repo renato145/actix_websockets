@@ -64,14 +64,6 @@ impl Handler<Connect> for PythonRepoSystem {
     }
 }
 
-#[derive(Debug, Message)]
-#[rtype(result = "()")]
-pub struct PythonRepoMessage {
-    id: Uuid,
-    task: Tasks,
-    payload: serde_json::Value,
-}
-
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Tasks {
