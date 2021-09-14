@@ -1,44 +1,44 @@
-use super::{error::WebsocketError, python_repo::PythonRepoMessage};
+use super::error::WebsocketError;
 use actix::{Message, Recipient};
+use anyhow::Context;
+use serde::Deserialize;
 use uuid::Uuid;
 
 /// Messages accepted from server.
-pub struct WebsocketMessage2 {
-    system: WebsocketSystems,
-    payload: serde_json::Value,
+#[derive(Debug, Deserialize)]
+pub struct WebsocketMessage {
+    pub system: WebsocketSystems,
+    pub task: TaskMessage,
 }
 
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum WebsocketSystems {
     PythonRepo,
 }
 
-/// Messages can be parsed from the form: "/<service>/<command>/<data>"
-#[derive(Debug)]
-pub enum WebsocketMessage {
-    PythonRepo(PythonRepoMessage),
+/// Messages that represent tasks.
+#[derive(Debug, Deserialize, actix::Message)]
+#[rtype(result = "Result<(), WebsocketError>")]
+pub struct TaskMessage {
+    pub name: String,
+    pub payload: TaskPayload,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TaskPayload {
+    #[serde(skip)]
+    pub id: Option<Uuid>,
+    pub data: serde_json::Value,
 }
 
 impl WebsocketMessage {
-    pub fn parse(id: Uuid, msg: &str) -> Result<Self, WebsocketError> {
-        let msg_parts = msg.splitn(2, '/').collect::<Vec<_>>();
-        if msg_parts.len() != 2 {
-            return Err(WebsocketError::MsgParseError(format!(
-                "Incomplete message: {:?}",
-                msg
-            )));
-        }
-
-        let msg = match msg_parts[0] {
-            "python_repo" => Self::PythonRepo(PythonRepoMessage::parse(id, msg_parts[1])?),
-            invalid_service => {
-                return Err(WebsocketError::MsgParseError(format!(
-                    "Invalid service: {:?}",
-                    invalid_service
-                )))
-            }
-        };
-
-        Ok(msg)
+    pub fn parse(id: Uuid, message: &str) -> Result<Self, WebsocketError> {
+        let mut message = serde_json::from_str::<WebsocketMessage>(message)
+            .context("Failed to deserialize message.")
+            .map_err(WebsocketError::MessageParseError)?;
+        message.task.payload.id = Some(id);
+        Ok(message)
     }
 }
 
@@ -68,4 +68,23 @@ impl From<anyhow::Error> for ClientMessage {
 pub struct Connect {
     pub id: Uuid,
     pub addr: Recipient<ClientMessage>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn correctly_deserialize_websocket_message() {
+        let message = serde_json::json!({
+            "system": "python_repo",
+            "task": {
+                "name": "get_files",
+                "payload": {"data": "tests/examples"}
+            }
+        });
+        let message = serde_json::from_value::<WebsocketMessage>(message).unwrap();
+        assert_eq!(WebsocketSystems::PythonRepo, message.system);
+        assert_eq!(None, message.task.payload.id);
+    }
 }

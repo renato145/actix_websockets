@@ -1,12 +1,13 @@
 use super::{
     error::WebsocketError,
-    message::{ClientMessage, Connect},
+    message::{ClientMessage, Connect, TaskMessage, TaskPayload},
 };
 use crate::error_chain_fmt;
 use actix::{Actor, AsyncContext, Handler, Message, Recipient};
 use anyhow::Context;
 use glob::glob;
-use std::{collections::HashMap, path::Path};
+use serde::Deserialize;
+use std::{collections::HashMap, convert::TryFrom, path::Path};
 use uuid::Uuid;
 
 #[derive(thiserror::Error)]
@@ -65,43 +66,34 @@ impl Handler<Connect> for PythonRepoSystem {
 
 #[derive(Debug, Message)]
 #[rtype(result = "()")]
-pub enum PythonRepoMessage {
-    GetFiles(GetFiles),
+pub struct PythonRepoMessage {
+    id: Uuid,
+    task: Tasks,
+    payload: serde_json::Value,
 }
 
-impl PythonRepoMessage {
-    pub fn parse(id: Uuid, message: &str) -> Result<Self, WebsocketError> {
-        let msg_parts = message.splitn(2, '/').collect::<Vec<_>>();
-        match msg_parts[0] {
-            "get_files" => {
-                if msg_parts.len() == 2 {
-                    Ok(Self::GetFiles(GetFiles {
-                        id,
-                        path: msg_parts[1].into(),
-                    }))
-                } else {
-                    Err(WebsocketError::MsgParseError("Path not given".into()))
-                }
-            }
-            "" => Err(WebsocketError::MsgParseError("No command given".into())),
-            invalid_command => Err(WebsocketError::MsgParseError(format!(
-                "Invalid command: {:?}",
-                invalid_command
-            ))),
-        }
-    }
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Tasks {
+    GetFiles,
 }
 
 /// Dispatcher for task handlers
-impl Handler<PythonRepoMessage> for PythonRepoSystem {
-    type Result = ();
+impl Handler<TaskMessage> for PythonRepoSystem {
+    type Result = Result<(), WebsocketError>;
 
-    #[tracing::instrument(name = "Handle Python Repo message", skip(self, ctx))]
-    fn handle(&mut self, message: PythonRepoMessage, ctx: &mut Self::Context) -> Self::Result {
+    #[tracing::instrument(name = "Handle task (PythonRepoSystem)", skip(self, ctx))]
+    fn handle(&mut self, task: TaskMessage, ctx: &mut Self::Context) -> Self::Result {
         let addr = ctx.address();
-        match message {
-            PythonRepoMessage::GetFiles(task) => addr.do_send(task),
+        match serde_json::from_str::<Tasks>(&format!("{:?}", task.name))
+            .context("Failed to deserialize task name.")
+            .map_err(WebsocketError::MessageParseError)?
+        {
+            Tasks::GetFiles => {
+                addr.do_send(GetFiles::try_from(task.payload)?);
+            }
         }
+        Ok(())
     }
 }
 
@@ -110,6 +102,26 @@ impl Handler<PythonRepoMessage> for PythonRepoSystem {
 pub struct GetFiles {
     id: Uuid,
     path: String,
+}
+
+impl TryFrom<TaskPayload> for GetFiles {
+    type Error = WebsocketError;
+
+    fn try_from(payload: TaskPayload) -> Result<Self, Self::Error> {
+        let id = payload
+            .id
+            .ok_or(WebsocketError::MessageParseError(anyhow::anyhow!(
+                "No `id` found on payload."
+            )))?;
+        let path = payload
+            .data
+            .as_str()
+            .ok_or(WebsocketError::MessageParseError(anyhow::anyhow!(
+                "No `path` found on payload."
+            )))?
+            .into();
+        Ok(Self { id, path })
+    }
 }
 
 impl Handler<GetFiles> for PythonRepoSystem {
@@ -135,5 +147,25 @@ impl Handler<GetFiles> for PythonRepoSystem {
             Err(e) => Err(e),
         };
         self.send_message(message.id, result.into());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::websocket::message::WebsocketMessage;
+
+    #[test]
+    fn correctly_deserialize_task_name() {
+        let message = serde_json::json!({
+            "system": "python_repo",
+            "task": {
+                "name": "get_files",
+                "payload": {"data": "tests/examples"}
+            }
+        });
+        let message = serde_json::from_value::<WebsocketMessage>(message).unwrap();
+        let task = serde_json::from_str::<Tasks>(&format!("{:?}", message.task.name)).unwrap();
+        assert_eq!(Tasks::GetFiles, task);
     }
 }

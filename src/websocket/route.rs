@@ -2,7 +2,7 @@ use super::{
     message::{ClientMessage, Connect, WebsocketMessage},
     python_repo::PythonRepoSystem,
 };
-use crate::configuration::WebsocketSettings;
+use crate::{configuration::WebsocketSettings, websocket::message::WebsocketSystems};
 use actix::{
     Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, ContextFutureSpawner, Handler,
     StreamHandler, WrapFuture,
@@ -72,17 +72,15 @@ impl WebsocketSystem {
     )]
     fn process_message(&self, text: &str, ctx: &mut ws::WebsocketContext<WebsocketSystem>) {
         match WebsocketMessage::parse(self.id, text) {
-            Ok(msg) => {
-                tracing::Span::current().record("parsed_message", &tracing::field::debug(&msg));
-                match msg {
-                    WebsocketMessage::PythonRepo(python_repo_msg) => {
-                        self.python_repo_system.do_send(python_repo_msg)
-                    }
+            Ok(message) => {
+                tracing::Span::current().record("parsed_message", &tracing::field::debug(&message));
+                match message.system {
+                    WebsocketSystems::PythonRepo => self.python_repo_system.do_send(message.task),
                 }
             }
             Err(e) => {
                 tracing::error!("{:?}", e);
-                ctx.text(format!("{}", e));
+                ctx.address().do_send(ClientMessage::from(e));
             }
         }
     }
@@ -121,7 +119,8 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebsocketSystem {
     fn handle(&mut self, item: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
         let msg = match item {
             Ok(msg) => msg,
-            Err(_) => {
+            Err(e) => {
+                tracing::error!("Unexpected error: {:?}", e);
                 ctx.stop();
                 return;
             }

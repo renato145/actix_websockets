@@ -42,13 +42,20 @@ impl TestApp {
             .await
             .expect("Failed to send message.");
 
-        if let Some(Ok(ws::Frame::Text(msg))) = connection.next().await {
-            let msg =
-                serde_json::from_slice::<serde_json::Value>(&msg).expect("Failed to parse JSON.");
-            tracing::info!("{}", msg);
-            msg
-        } else {
-            panic!("Failed to receive message.");
+        loop {
+            match connection.next().await {
+                Some(Ok(ws::Frame::Text(msg))) => {
+                    let msg = serde_json::from_slice::<serde_json::Value>(&msg)
+                        .expect(&format!("Failed to parse JSON: {:?}", msg));
+                    tracing::info!("RESULT: {}", msg);
+                    return msg;
+                }
+                Some(Ok(ws::Frame::Ping(_))) => {}
+                err => {
+                    tracing::error!("Receive message: {:?}", err);
+                    panic!("Failed to receive message.");
+                }
+            }
         }
     }
 }
