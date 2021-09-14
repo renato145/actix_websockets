@@ -30,13 +30,19 @@ async fn receive_python_files_on_valid_path() {
 async fn receive_error_on_invalid_path() {
     // Arrange
     let app = spawn_app().await;
+    let message = serde_json::json!({
+        "system": "python_repo",
+        "task": {
+            "name": "get_files",
+            "payload": {"data": "tests/some_incorrect_path"}
+        }
+    })
+    .to_string();
 
     // Act
-    let msg = app
-        .get_first_result("python_repo/get_files/tests/some_incorrect_path")
-        .await;
+    let result = app.get_first_result(&message).await;
 
     // Assert
-    let success = msg.get("success").unwrap().as_bool().unwrap();
+    let success = result.get("success").unwrap().as_bool().unwrap();
     assert!(!success, "Call should not success.");
 }
