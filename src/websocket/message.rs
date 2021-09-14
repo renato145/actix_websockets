@@ -1,19 +1,28 @@
-use super::{error::WSError, python_repo::PythonRepoMessage};
+use super::{error::WebsocketError, python_repo::PythonRepoMessage};
 use actix::{Message, Recipient};
 use uuid::Uuid;
 
 /// Messages accepted from server.
+pub struct WebsocketMessage2 {
+    system: WebsocketSystems,
+    payload: serde_json::Value,
+}
+
+pub enum WebsocketSystems {
+    PythonRepo,
+}
+
 /// Messages can be parsed from the form: "/<service>/<command>/<data>"
 #[derive(Debug)]
-pub enum WSMessage {
+pub enum WebsocketMessage {
     PythonRepo(PythonRepoMessage),
 }
 
-impl WSMessage {
-    pub fn parse(id: Uuid, msg: &str) -> Result<Self, WSError> {
+impl WebsocketMessage {
+    pub fn parse(id: Uuid, msg: &str) -> Result<Self, WebsocketError> {
         let msg_parts = msg.splitn(2, '/').collect::<Vec<_>>();
         if msg_parts.len() != 2 {
-            return Err(WSError::MsgParseError(format!(
+            return Err(WebsocketError::MsgParseError(format!(
                 "Incomplete message: {:?}",
                 msg
             )));
@@ -22,7 +31,7 @@ impl WSMessage {
         let msg = match msg_parts[0] {
             "python_repo" => Self::PythonRepo(PythonRepoMessage::parse(id, msg_parts[1])?),
             invalid_service => {
-                return Err(WSError::MsgParseError(format!(
+                return Err(WebsocketError::MsgParseError(format!(
                     "Invalid service: {:?}",
                     invalid_service
                 )))

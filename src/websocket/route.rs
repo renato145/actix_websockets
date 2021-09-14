@@ -1,6 +1,6 @@
 use super::{
-    message::{ClientMessage, Connect, WSMessage},
-    python_repo::PythonRepoServer,
+    message::{ClientMessage, Connect, WebsocketMessage},
+    python_repo::PythonRepoSystem,
 };
 use crate::configuration::WebsocketSettings;
 use actix::{
@@ -14,18 +14,18 @@ use uuid::Uuid;
 
 #[tracing::instrument(
     name = "Starting web socket",
-    skip(req, stream, websocket_settings, python_repo_server)
+    skip(req, stream, websocket_settings, python_repo_system)
 )]
 pub async fn ws_index(
     req: HttpRequest,
     stream: web::Payload,
     websocket_settings: web::Data<WebsocketSettings>,
-    python_repo_server: web::Data<Addr<PythonRepoServer>>,
+    python_repo_system: web::Data<Addr<PythonRepoSystem>>,
 ) -> Result<HttpResponse, actix_web::Error> {
     let resp = ws::start(
-        MainWebsocket::new(
+        WebsocketSystem::new(
             websocket_settings.as_ref(),
-            python_repo_server.get_ref().clone(),
+            python_repo_system.get_ref().clone(),
         ),
         &req,
         stream,
@@ -33,20 +33,20 @@ pub async fn ws_index(
     resp
 }
 
-struct MainWebsocket {
+struct WebsocketSystem {
     id: Uuid,
     hb: Instant,
     settings: WebsocketSettings,
-    python_repo_server: Addr<PythonRepoServer>,
+    python_repo_system: Addr<PythonRepoSystem>,
 }
 
-impl MainWebsocket {
-    fn new(settings: &WebsocketSettings, python_repo_server: Addr<PythonRepoServer>) -> Self {
+impl WebsocketSystem {
+    fn new(settings: &WebsocketSettings, python_repo_system: Addr<PythonRepoSystem>) -> Self {
         Self {
             id: Uuid::new_v4(),
             hb: Instant::now(),
             settings: settings.clone(),
-            python_repo_server,
+            python_repo_system,
         }
     }
 
@@ -70,13 +70,13 @@ impl MainWebsocket {
         skip(self, ctx),
         fields(parsed_message=tracing::field::Empty)
     )]
-    fn process_message(&self, text: &str, ctx: &mut ws::WebsocketContext<MainWebsocket>) {
-        match WSMessage::parse(self.id, text) {
+    fn process_message(&self, text: &str, ctx: &mut ws::WebsocketContext<WebsocketSystem>) {
+        match WebsocketMessage::parse(self.id, text) {
             Ok(msg) => {
                 tracing::Span::current().record("parsed_message", &tracing::field::debug(&msg));
                 match msg {
-                    WSMessage::PythonRepo(python_repo_msg) => {
-                        self.python_repo_server.do_send(python_repo_msg)
+                    WebsocketMessage::PythonRepo(python_repo_msg) => {
+                        self.python_repo_system.do_send(python_repo_msg)
                     }
                 }
             }
@@ -88,14 +88,14 @@ impl MainWebsocket {
     }
 }
 
-impl Actor for MainWebsocket {
+impl Actor for WebsocketSystem {
     type Context = ws::WebsocketContext<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
         self.hb(ctx);
 
-        // Register to PythonRepoServer
-        self.python_repo_server
+        // Register to PythonRepoSystem
+        self.python_repo_system
             .send(Connect {
                 id: self.id,
                 addr: ctx.address().recipient(),
@@ -103,7 +103,7 @@ impl Actor for MainWebsocket {
             .into_actor(self)
             .then(|res, _act, ctx| {
                 if let Err(e) = res {
-                    tracing::error!("Failed to connect to PythonRepoServer: {:?}", e);
+                    tracing::error!("Failed to connect to PythonRepoSystem: {:?}", e);
                     ctx.stop();
                 }
                 actix::fut::ready(())
@@ -112,7 +112,7 @@ impl Actor for MainWebsocket {
     }
 }
 
-impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MainWebsocket {
+impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebsocketSystem {
     #[tracing::instrument(
         name = "Handling websocket message",
         skip(self, item, ctx),
@@ -151,7 +151,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MainWebsocket {
     }
 }
 
-impl Handler<ClientMessage> for MainWebsocket {
+impl Handler<ClientMessage> for WebsocketSystem {
     type Result = ();
 
     #[tracing::instrument(name = "Redirecting message to client", skip(self, ctx))]

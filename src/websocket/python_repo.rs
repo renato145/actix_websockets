@@ -1,5 +1,5 @@
 use super::{
-    error::WSError,
+    error::WebsocketError,
     message::{ClientMessage, Connect},
 };
 use crate::error_chain_fmt;
@@ -27,11 +27,11 @@ impl From<PythonRepoError> for ClientMessage {
     }
 }
 
-pub struct PythonRepoServer {
+pub struct PythonRepoSystem {
     sessions: HashMap<Uuid, Recipient<ClientMessage>>,
 }
 
-impl Default for PythonRepoServer {
+impl Default for PythonRepoSystem {
     fn default() -> Self {
         Self {
             sessions: Default::default(),
@@ -39,25 +39,25 @@ impl Default for PythonRepoServer {
     }
 }
 
-impl PythonRepoServer {
-    #[tracing::instrument(name = "Sending message from PythonRepoServer", skip(self))]
+impl PythonRepoSystem {
+    #[tracing::instrument(name = "Sending message from PythonRepoSystem", skip(self))]
     pub fn send_message(&self, id: Uuid, msg: ClientMessage) {
         if let Some(addr) = self.sessions.get(&id) {
             if let Err(e) = addr.do_send(msg) {
-                tracing::error!("Failed to send message from PythonRepoServer: {:?}", e);
+                tracing::error!("Failed to send message from PythonRepoSystem: {:?}", e);
             }
         }
     }
 }
 
-impl Actor for PythonRepoServer {
+impl Actor for PythonRepoSystem {
     type Context = actix::Context<Self>;
 }
 
-impl Handler<Connect> for PythonRepoServer {
+impl Handler<Connect> for PythonRepoSystem {
     type Result = ();
 
-    #[tracing::instrument(name = "Connecting socket to Python Repo server", skip(self, _ctx))]
+    #[tracing::instrument(name = "Connecting socket to PythonRepoSystem", skip(self, _ctx))]
     fn handle(&mut self, message: Connect, _ctx: &mut Self::Context) -> Self::Result {
         self.sessions.insert(message.id, message.addr);
     }
@@ -70,7 +70,7 @@ pub enum PythonRepoMessage {
 }
 
 impl PythonRepoMessage {
-    pub fn parse(id: Uuid, message: &str) -> Result<Self, WSError> {
+    pub fn parse(id: Uuid, message: &str) -> Result<Self, WebsocketError> {
         let msg_parts = message.splitn(2, '/').collect::<Vec<_>>();
         match msg_parts[0] {
             "get_files" => {
@@ -80,11 +80,11 @@ impl PythonRepoMessage {
                         path: msg_parts[1].into(),
                     }))
                 } else {
-                    Err(WSError::MsgParseError("Path not given".into()))
+                    Err(WebsocketError::MsgParseError("Path not given".into()))
                 }
             }
-            "" => Err(WSError::MsgParseError("No command given".into())),
-            invalid_command => Err(WSError::MsgParseError(format!(
+            "" => Err(WebsocketError::MsgParseError("No command given".into())),
+            invalid_command => Err(WebsocketError::MsgParseError(format!(
                 "Invalid command: {:?}",
                 invalid_command
             ))),
@@ -93,7 +93,7 @@ impl PythonRepoMessage {
 }
 
 /// Dispatcher for task handlers
-impl Handler<PythonRepoMessage> for PythonRepoServer {
+impl Handler<PythonRepoMessage> for PythonRepoSystem {
     type Result = ();
 
     #[tracing::instrument(name = "Handle Python Repo message", skip(self, ctx))]
@@ -112,7 +112,7 @@ pub struct GetFiles {
     path: String,
 }
 
-impl Handler<GetFiles> for PythonRepoServer {
+impl Handler<GetFiles> for PythonRepoSystem {
     type Result = ();
 
     #[tracing::instrument(name = "Handle task GetFiles", skip(self, _ctx))]
