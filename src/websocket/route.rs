@@ -1,18 +1,32 @@
-use super::{error::WSError, python_repo::PythonRepoMessage};
+use super::{
+    message::{ClientMessage, Connect, WSMessage},
+    python_repo::PythonRepoServer,
+};
 use crate::configuration::WebsocketSettings;
-use actix::{Actor, ActorContext, AsyncContext, StreamHandler};
+use actix::{
+    Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, ContextFutureSpawner, Handler,
+    StreamHandler, WrapFuture,
+};
 use actix_web::{web, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
-use std::{str::FromStr, time::Instant};
+use std::time::Instant;
+use uuid::Uuid;
 
-#[tracing::instrument(name = "Starting web socket", skip(req, stream, websocket_settings))]
+#[tracing::instrument(
+    name = "Starting web socket",
+    skip(req, stream, websocket_settings, python_repo_server)
+)]
 pub async fn ws_index(
     req: HttpRequest,
     stream: web::Payload,
     websocket_settings: web::Data<WebsocketSettings>,
+    python_repo_server: web::Data<Addr<PythonRepoServer>>,
 ) -> Result<HttpResponse, actix_web::Error> {
     let resp = ws::start(
-        MainWebsocket::new(websocket_settings.as_ref()),
+        MainWebsocket::new(
+            websocket_settings.as_ref(),
+            python_repo_server.get_ref().clone(),
+        ),
         &req,
         stream,
     );
@@ -20,15 +34,19 @@ pub async fn ws_index(
 }
 
 struct MainWebsocket {
+    id: Uuid,
     hb: Instant,
     settings: WebsocketSettings,
+    python_repo_server: Addr<PythonRepoServer>,
 }
 
 impl MainWebsocket {
-    fn new(settings: &WebsocketSettings) -> Self {
+    fn new(settings: &WebsocketSettings, python_repo_server: Addr<PythonRepoServer>) -> Self {
         Self {
+            id: Uuid::new_v4(),
             hb: Instant::now(),
             settings: settings.clone(),
+            python_repo_server,
         }
     }
 
@@ -48,20 +66,17 @@ impl MainWebsocket {
     }
 
     #[tracing::instrument(
-        name = "Processing message",
+        name = "Process message",
         skip(self, ctx),
         fields(parsed_message=tracing::field::Empty)
     )]
     fn process_message(&self, text: &str, ctx: &mut ws::WebsocketContext<MainWebsocket>) {
-        match text.parse::<WSMessage>() {
+        match WSMessage::parse(self.id, text) {
             Ok(msg) => {
                 tracing::Span::current().record("parsed_message", &tracing::field::debug(&msg));
                 match msg {
-                    WSMessage::PythonRepo(path) => {
-                        ctx.text(format!(
-                            "Some result should be given here from path {:?}",
-                            path
-                        ));
+                    WSMessage::PythonRepo(python_repo_msg) => {
+                        self.python_repo_server.do_send(python_repo_msg)
                     }
                 }
             }
@@ -78,6 +93,22 @@ impl Actor for MainWebsocket {
 
     fn started(&mut self, ctx: &mut Self::Context) {
         self.hb(ctx);
+
+        // Register to PythonRepoServer
+        self.python_repo_server
+            .send(Connect {
+                id: self.id,
+                addr: ctx.address().recipient(),
+            })
+            .into_actor(self)
+            .then(|res, _act, ctx| {
+                if let Err(e) = res {
+                    tracing::error!("Failed to connect to PythonRepoServer: {:?}", e);
+                    ctx.stop();
+                }
+                actix::fut::ready(())
+            })
+            .wait(ctx);
     }
 }
 
@@ -120,34 +151,14 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MainWebsocket {
     }
 }
 
-/// Messages can be parsed from the form: "/<service>/<command>/<data>"
-#[derive(Debug)]
-pub enum WSMessage {
-    PythonRepo(PythonRepoMessage),
-}
+impl Handler<ClientMessage> for MainWebsocket {
+    type Result = ();
 
-impl FromStr for WSMessage {
-    type Err = WSError;
-
-    fn from_str(msg: &str) -> Result<Self, Self::Err> {
-        let msg_parts = msg.splitn(2, '/').collect::<Vec<_>>();
-        if msg_parts.len() != 2 {
-            return Err(WSError::MsgParseError(anyhow::anyhow!(
-                "Incomplete message: {:?}",
-                msg
-            )));
+    #[tracing::instrument(name = "Redirecting message to client", skip(self, ctx))]
+    fn handle(&mut self, message: ClientMessage, ctx: &mut Self::Context) -> Self::Result {
+        match serde_json::to_string(&message.0) {
+            Ok(msg) => ctx.text(msg),
+            Err(e) => tracing::error!("Failed to send message to client: {:?}", e),
         }
-
-        let msg = match msg_parts[0] {
-            "python_repo" => Self::PythonRepo(msg_parts[1].parse()?),
-            invalid_service => {
-                return Err(WSError::MsgParseError(anyhow::anyhow!(
-                    "Invalid service: {:?}",
-                    invalid_service
-                )))
-            }
-        };
-
-        Ok(msg)
     }
 }

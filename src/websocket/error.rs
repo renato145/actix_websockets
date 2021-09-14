@@ -2,8 +2,8 @@ use crate::error_chain_fmt;
 
 #[derive(thiserror::Error)]
 pub enum WSError {
-    #[error("Failed to parse websocket message.")]
-    MsgParseError(#[source] anyhow::Error),
+    #[error("Failed to parse websocket message: {0}")]
+    MsgParseError(String),
     #[error(transparent)]
     UnexpectedError(#[from] anyhow::Error),
 }
