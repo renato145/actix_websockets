@@ -155,8 +155,8 @@ impl Handler<ClientMessage> for WebsocketSystem {
 
     #[tracing::instrument(name = "Redirecting message to client", skip(self, ctx))]
     fn handle(&mut self, message: ClientMessage, ctx: &mut Self::Context) -> Self::Result {
-        match serde_json::to_string(&message.0) {
-            Ok(msg) => ctx.text(msg),
+        match serde_json::to_string(&message) {
+            Ok(message) => ctx.text(message),
             Err(e) => tracing::error!("Failed to send message to client: {:?}", e),
         }
     }

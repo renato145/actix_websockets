@@ -1,6 +1,6 @@
 use super::{
     error::WebsocketError,
-    message::{ClientMessage, Connect, TaskMessage, TaskPayload},
+    message::{ClientMessage, Connect, TaskMessage, TaskPayload, WebsocketSystems},
 };
 use crate::error_chain_fmt;
 use actix::{Actor, AsyncContext, Handler, Message, Recipient};
@@ -14,6 +14,8 @@ use uuid::Uuid;
 pub enum PythonRepoError {
     #[error("Invalid path: {0:?}")]
     InvalidPath(String),
+    #[error(transparent)]
+    UnexpectedError(#[from] anyhow::Error),
 }
 
 impl std::fmt::Debug for PythonRepoError {
@@ -22,9 +24,26 @@ impl std::fmt::Debug for PythonRepoError {
     }
 }
 
+impl From<Result<serde_json::Value, PythonRepoError>> for ClientMessage {
+    fn from(res: Result<serde_json::Value, PythonRepoError>) -> Self {
+        match res {
+            Ok(message) => Self {
+                system: Some(WebsocketSystems::PythonRepo),
+                success: true,
+                payload: message,
+            },
+            Err(err) => err.into(),
+        }
+    }
+}
+
 impl From<PythonRepoError> for ClientMessage {
     fn from(e: PythonRepoError) -> Self {
-        Self(serde_json::json!({"success": false, "payload": format!("{}", e)}))
+        Self {
+            system: Some(WebsocketSystems::PythonRepo),
+            success: false,
+            payload: e.to_string().into(),
+        }
     }
 }
 
@@ -135,7 +154,9 @@ impl Handler<GetFiles> for PythonRepoSystem {
                 serde_json::to_value(files).context("Failed to convert message to JSON format.")
             }
             Err(e) => Err(e),
-        };
+        }
+        .map_err(PythonRepoError::UnexpectedError);
+
         self.send_message(message.id, result.into());
     }
 }

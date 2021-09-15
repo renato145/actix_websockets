@@ -1,7 +1,7 @@
 use super::error::WebsocketError;
 use actix::{Message, Recipient};
 use anyhow::Context;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// Messages accepted from server.
@@ -11,7 +11,7 @@ pub struct WebsocketMessage {
     pub task: TaskMessage,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum WebsocketSystems {
     PythonRepo,
@@ -43,23 +43,12 @@ impl WebsocketMessage {
 }
 
 /// Messages to send to client.
-#[derive(Debug, Message)]
+#[derive(Debug, Message, Serialize)]
 #[rtype(result = "()")]
-pub struct ClientMessage(pub serde_json::Value);
-
-impl From<Result<serde_json::Value, anyhow::Error>> for ClientMessage {
-    fn from(res: Result<serde_json::Value, anyhow::Error>) -> Self {
-        match res {
-            Ok(value) => Self(serde_json::json!({"success": true, "payload": value})),
-            Err(e) => e.into(),
-        }
-    }
-}
-
-impl From<anyhow::Error> for ClientMessage {
-    fn from(e: anyhow::Error) -> Self {
-        Self(serde_json::json!({"success": false, "payload": format!("{}", e)}))
-    }
+pub struct ClientMessage {
+    pub system: Option<WebsocketSystems>,
+    pub success: bool,
+    pub payload: serde_json::Value,
 }
 
 /// Start connection with a server.

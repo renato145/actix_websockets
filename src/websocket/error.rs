@@ -1,6 +1,5 @@
-use crate::error_chain_fmt;
-
 use super::message::ClientMessage;
+use crate::error_chain_fmt;
 
 #[derive(thiserror::Error)]
 pub enum WebsocketError {
@@ -18,6 +17,10 @@ impl std::fmt::Debug for WebsocketError {
 
 impl From<WebsocketError> for ClientMessage {
     fn from(e: WebsocketError) -> Self {
-        Self(serde_json::json!({"success": false, "payload": format!("{}", e)}))
+        Self {
+            system: None,
+            success: false,
+            payload: e.to_string().into(),
+        }
     }
 }
