@@ -100,17 +100,15 @@ impl TryFrom<TaskPayload> for GetFiles {
     type Error = WebsocketError;
 
     fn try_from(payload: TaskPayload) -> Result<Self, Self::Error> {
-        let id = payload
-            .id
-            .ok_or(WebsocketError::MessageParseError(anyhow::anyhow!(
-                "No `id` found on payload."
-            )))?;
+        let id = payload.id.ok_or_else(|| {
+            WebsocketError::MessageParseError(anyhow::anyhow!("No `id` found on payload."))
+        })?;
         let path = payload
             .data
             .as_str()
-            .ok_or(WebsocketError::MessageParseError(anyhow::anyhow!(
-                "No `path` found on payload."
-            )))?
+            .ok_or_else(|| {
+                WebsocketError::MessageParseError(anyhow::anyhow!("No `path` found on payload."))
+            })?
             .into();
         Ok(Self { id, path })
     }
