@@ -1,3 +1,5 @@
+use actix_websockets::websocket::message::WebsocketSystems;
+
 use crate::helpers::spawn_app;
 
 #[actix_rt::test]
@@ -17,9 +19,9 @@ async fn receive_python_files_on_valid_path() {
     let result = app.get_first_result(&message).await;
 
     // Assert
-    let success = result.get("success").unwrap().as_bool().unwrap();
-    assert!(success, "Call was not successful.");
-    let payload = result.get("payload").unwrap().to_string();
+    assert_eq!(result.system.unwrap(), WebsocketSystems::PythonRepo);
+    assert!(result.success, "Call was not successful.");
+    let payload = result.payload.to_string();
     assert!(
         payload.contains("a.py"),
         "Expected file (a.py) not found in payload."
@@ -43,6 +45,6 @@ async fn receive_error_on_invalid_path() {
     let result = app.get_first_result(&message).await;
 
     // Assert
-    let success = result.get("success").unwrap().as_bool().unwrap();
-    assert!(!success, "Call should not success.");
+    assert_eq!(result.system.unwrap(), WebsocketSystems::PythonRepo);
+    assert!(!result.success, "Call should not success.");
 }

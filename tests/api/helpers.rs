@@ -5,6 +5,7 @@ use actix_websockets::{
     configuration::get_configuration,
     startup::Application,
     telemetry::{get_subscriber, init_subscriber},
+    websocket::message::ClientMessage,
 };
 use awc::Client;
 use futures::{SinkExt, StreamExt};
@@ -30,7 +31,7 @@ pub struct TestApp {
 }
 
 impl TestApp {
-    pub async fn get_first_result(&self, message: &str) -> serde_json::Value {
+    pub async fn get_first_result(&self, message: &str) -> ClientMessage {
         let (_response, mut connection) = Client::new()
             .ws(format!("{}/ws/", self.address))
             .connect()
@@ -45,9 +46,9 @@ impl TestApp {
         loop {
             match connection.next().await {
                 Some(Ok(ws::Frame::Text(msg))) => {
-                    let msg = serde_json::from_slice::<serde_json::Value>(&msg)
+                    let msg = serde_json::from_slice::<ClientMessage>(&msg)
                         .expect(&format!("Failed to parse JSON: {:?}", msg));
-                    tracing::info!("RESULT: {}", msg);
+                    tracing::info!("RESULT: {:?}", msg);
                     return msg;
                 }
                 Some(Ok(ws::Frame::Ping(_))) => {}

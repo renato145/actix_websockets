@@ -43,7 +43,7 @@ impl WebsocketMessage {
 }
 
 /// Messages to send to client.
-#[derive(Debug, Message, Serialize)]
+#[derive(Debug, Message, Serialize, Deserialize)]
 #[rtype(result = "()")]
 pub struct ClientMessage {
     pub system: Option<WebsocketSystems>,
