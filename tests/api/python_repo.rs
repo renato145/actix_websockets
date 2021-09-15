@@ -1,9 +1,8 @@
+use crate::helpers::spawn_app;
 use actix_websockets::websocket::message::WebsocketSystems;
 
-use crate::helpers::spawn_app;
-
 #[actix_rt::test]
-async fn receive_python_files_on_valid_path() {
+async fn get_files_receive_python_files_on_valid_path() {
     // Arrange
     let app = spawn_app().await;
     let message = serde_json::json!({
@@ -29,7 +28,7 @@ async fn receive_python_files_on_valid_path() {
 }
 
 #[actix_rt::test]
-async fn receive_error_on_invalid_path() {
+async fn get_files_receive_error_on_invalid_path() {
     // Arrange
     let app = spawn_app().await;
     let message = serde_json::json!({

@@ -90,10 +90,11 @@ impl Handler<TaskMessage> for PythonRepoSystem {
     #[tracing::instrument(name = "Handle task (PythonRepoSystem)", skip(self, ctx))]
     fn handle(&mut self, task: TaskMessage, ctx: &mut Self::Context) -> Self::Result {
         let addr = ctx.address();
-        match serde_json::from_str::<Tasks>(&format!("{:?}", task.name))
+        let task_name = serde_json::from_str::<Tasks>(&format!("{:?}", task.name))
             .context("Failed to deserialize task name.")
-            .map_err(WebsocketError::MessageParseError)?
-        {
+            .map_err(WebsocketError::MessageParseError)?;
+
+        match task_name {
             Tasks::GetFiles => {
                 addr.do_send(GetFiles::try_from(task.payload)?);
             }
