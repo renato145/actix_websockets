@@ -83,12 +83,6 @@ impl Handler<Connect> for PythonRepoSystem {
     }
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum Tasks {
-    GetFiles,
-}
-
 /// Dispatcher for task handlers
 impl Handler<TaskMessage> for PythonRepoSystem {
     type Result = Result<(), WebsocketError>;
@@ -106,6 +100,12 @@ impl Handler<TaskMessage> for PythonRepoSystem {
         }
         Ok(())
     }
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Tasks {
+    GetFiles,
 }
 
 #[derive(Debug, Message)]
