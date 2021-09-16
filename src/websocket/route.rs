@@ -80,7 +80,7 @@ impl WebsocketSystem {
             }
             Err(e) => {
                 tracing::error!("{:?}", e);
-                ctx.address().do_send(ClientMessage::from(e));
+                ctx.address().do_send(e.into());
             }
         }
     }

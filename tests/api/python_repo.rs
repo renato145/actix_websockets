@@ -47,3 +47,24 @@ async fn get_files_receive_error_on_invalid_path() {
     assert_eq!(result.system.unwrap(), WebsocketSystems::PythonRepo);
     assert!(!result.success, "Call should not success.");
 }
+
+#[actix_rt::test]
+async fn receive_error_on_invalid_task_name() {
+    // Arrange
+    let app = spawn_app().await;
+    let message = serde_json::json!({
+        "system": "python_repo",
+        "task": {
+            "name": "invalid_task_name",
+            "payload": {"data": "tests/some_incorrect_path"}
+        }
+    })
+    .to_string();
+
+    // Act
+    let result = app.get_first_result(&message).await;
+
+    // Assert
+    assert_eq!(result.system.unwrap(), WebsocketSystems::PythonRepo);
+    assert!(!result.success, "Call should not success.");
+}

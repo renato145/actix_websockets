@@ -1,6 +1,9 @@
 use super::{
     error::WebsocketError,
-    message::{ClientMessage, Connect, TaskMessage, TaskPayload, WebsocketSystems},
+    message::{
+        ClientMessage, ClientMessager, Connect, TaskMessage, TaskPayload, WebsocketSubSystem,
+        WebsocketSystems,
+    },
 };
 use crate::error_chain_fmt;
 use actix::{Actor, AsyncContext, Handler, Message, Recipient};
@@ -24,26 +27,9 @@ impl std::fmt::Debug for PythonRepoError {
     }
 }
 
-impl From<Result<serde_json::Value, PythonRepoError>> for ClientMessage {
-    fn from(res: Result<serde_json::Value, PythonRepoError>) -> Self {
-        match res {
-            Ok(message) => Self {
-                system: Some(WebsocketSystems::PythonRepo),
-                success: true,
-                payload: message,
-            },
-            Err(err) => err.into(),
-        }
-    }
-}
-
-impl From<PythonRepoError> for ClientMessage {
-    fn from(e: PythonRepoError) -> Self {
-        Self {
-            system: Some(WebsocketSystems::PythonRepo),
-            success: false,
-            payload: e.to_string().into(),
-        }
+impl WebsocketSubSystem for Result<serde_json::Value, PythonRepoError> {
+    fn system(&self) -> Option<WebsocketSystems> {
+        Some(WebsocketSystems::PythonRepo)
     }
 }
 
@@ -60,11 +46,18 @@ impl Default for PythonRepoSystem {
 }
 
 impl PythonRepoSystem {
+    /// Sends message to the main system.
     #[tracing::instrument(name = "Sending message from PythonRepoSystem", skip(self))]
-    pub fn send_message(&self, id: Uuid, msg: ClientMessage) {
-        if let Some(addr) = self.sessions.get(&id) {
-            if let Err(e) = addr.do_send(msg) {
-                tracing::error!("Failed to send message from PythonRepoSystem: {:?}", e);
+    pub fn send_message(&self, id: Uuid, msg: Result<serde_json::Value, PythonRepoError>) {
+        match self.sessions.get(&id) {
+            Some(addr) => {
+                let message = msg.to_message();
+                if let Err(e) = addr.do_send(message) {
+                    tracing::error!("Failed to send message from PythonRepoSystem: {:?}", e);
+                }
+            }
+            None => {
+                tracing::error!("No address found for id: {:?}", id);
             }
         }
     }
@@ -90,9 +83,18 @@ impl Handler<TaskMessage> for PythonRepoSystem {
     #[tracing::instrument(name = "Handle task (PythonRepoSystem)", skip(self, ctx))]
     fn handle(&mut self, task: TaskMessage, ctx: &mut Self::Context) -> Self::Result {
         let addr = ctx.address();
-        let task_name = serde_json::from_str::<Tasks>(&format!("{:?}", task.name))
+        let task_name = match serde_json::from_str::<Tasks>(&format!("{:?}", task.name))
             .context("Failed to deserialize task name.")
-            .map_err(WebsocketError::MessageParseError)?;
+            .map_err(WebsocketError::MessageParseError)
+        {
+            Ok(task) => task,
+            Err(e) => {
+                if let Some(id) = task.payload.id {
+                    self.send_message(id, Err(PythonRepoError::UnexpectedError(e.into())));
+                }
+                return Ok(());
+            }
+        };
 
         match task_name {
             Tasks::GetFiles => {
@@ -140,10 +142,7 @@ impl Handler<GetFiles> for PythonRepoSystem {
     #[tracing::instrument(name = "Handle task GetFiles", skip(self, _ctx))]
     fn handle(&mut self, message: GetFiles, _ctx: &mut Self::Context) -> Self::Result {
         if !Path::new(&message.path).exists() {
-            self.send_message(
-                message.id,
-                PythonRepoError::InvalidPath(message.path).into(),
-            );
+            self.send_message(message.id, Err(PythonRepoError::InvalidPath(message.path)));
             return;
         }
 
@@ -158,7 +157,7 @@ impl Handler<GetFiles> for PythonRepoSystem {
         }
         .map_err(PythonRepoError::UnexpectedError);
 
-        self.send_message(message.id, result.into());
+        self.send_message(message.id, result);
     }
 }
 

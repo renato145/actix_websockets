@@ -51,6 +51,42 @@ pub struct ClientMessage {
     pub payload: serde_json::Value,
 }
 
+pub trait WebsocketSubSystem {
+    fn system(&self) -> Option<WebsocketSystems>;
+}
+
+pub trait ClientMessager: WebsocketSubSystem {
+    fn success(&self) -> bool;
+    fn payload(self) -> serde_json::Value;
+    fn to_message(self) -> ClientMessage
+    where
+        Self: Sized,
+    {
+        ClientMessage {
+            system: self.system(),
+            success: self.success(),
+            payload: self.payload(),
+        }
+    }
+}
+
+impl<E> ClientMessager for Result<serde_json::Value, E>
+where
+    Result<serde_json::Value, E>: WebsocketSubSystem,
+    E: std::error::Error,
+{
+    fn success(&self) -> bool {
+        self.is_ok()
+    }
+
+    fn payload(self) -> serde_json::Value {
+        match self {
+            Ok(value) => value,
+            Err(e) => e.to_string().into(),
+        }
+    }
+}
+
 /// Start connection with a server.
 #[derive(Debug, Message)]
 #[rtype(result = "()")]

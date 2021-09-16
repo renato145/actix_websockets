@@ -1,4 +1,4 @@
-use super::message::ClientMessage;
+use super::message::{ClientMessage, WebsocketSubSystem, WebsocketSystems};
 use crate::error_chain_fmt;
 
 #[derive(thiserror::Error)]
@@ -17,10 +17,16 @@ impl std::fmt::Debug for WebsocketError {
 
 impl From<WebsocketError> for ClientMessage {
     fn from(e: WebsocketError) -> Self {
-        Self {
+        ClientMessage {
             system: None,
             success: false,
             payload: e.to_string().into(),
         }
+    }
+}
+
+impl WebsocketSubSystem for Result<serde_json::Value, WebsocketError> {
+    fn system(&self) -> Option<WebsocketSystems> {
+        None
     }
 }

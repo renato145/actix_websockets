@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use actix_web_actors::ws;
 use actix_websockets::{
     configuration::get_configuration,
@@ -10,6 +8,7 @@ use actix_websockets::{
 use awc::Client;
 use futures::{SinkExt, StreamExt};
 use once_cell::sync::Lazy;
+use std::time::Duration;
 
 // Ensure that 'tracing' stack is only initialized once using `once_cell`
 static TRACING: Lazy<()> = Lazy::new(|| {
