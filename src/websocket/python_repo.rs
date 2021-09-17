@@ -74,27 +74,16 @@ impl Handler<TaskMessage> for PythonRepoSystem {
     type Result = ();
 
     #[tracing::instrument(name = "Handle task (PythonRepoSystem)", skip(self, ctx))]
-    fn handle(&mut self, task: TaskMessage, ctx: &mut Self::Context) -> Self::Result {
-        let addr = ctx.address();
-        // let task = self.task_from_message(task);
-        let task_name = match serde_json::from_str::<Tasks>(&format!("{:?}", task.name))
-            .context("Failed to deserialize task name.")
-            .map_err(WebsocketError::MessageParseError)
-        {
+    fn handle(&mut self, task_message: TaskMessage, ctx: &mut Self::Context) -> Self::Result {
+        let task = match self.task_from_message(task_message.clone()) {
             Ok(task) => task,
-            Err(e) => {
-                if let Some(id) = task.payload.id {
-                    self.send_message(id, Err(PythonRepoError::UnexpectedError(e.into())));
-                }
-                return;
-            }
+            Err(_) => return,
         };
 
-        match task_name {
+        let addr = ctx.address();
+        match task {
             Tasks::GetFiles => {
-                if let Ok(task) = GetFiles::try_from(task.payload) {
-                    addr.do_send(task);
-                }
+                let _ = GetFiles::try_from(task_message.payload).map(|task| addr.do_send(task));
             }
         }
     }

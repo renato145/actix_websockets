@@ -18,14 +18,14 @@ pub enum WebsocketSystems {
 }
 
 /// Messages that represent tasks.
-#[derive(Debug, Deserialize, actix::Message)]
+#[derive(Debug, Clone, Deserialize, actix::Message)]
 #[rtype(result = "()")]
 pub struct TaskMessage {
     pub name: String,
     pub payload: TaskPayload,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct TaskPayload {
     #[serde(skip)]
     pub id: Option<Uuid>,
