@@ -4,8 +4,17 @@ use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Messages accepted from server.
+/// Raw message from clients.
 #[derive(Debug, Deserialize)]
+pub struct RawWebsocketMessage {
+    pub system: WebsocketSystems,
+    pub task: String,
+    #[serde(default = "serde_json::Value::default")]
+    pub payload: serde_json::Value,
+}
+
+/// Messages accepted from server.
+#[derive(Debug)]
 pub struct WebsocketMessage {
     pub system: WebsocketSystems,
     pub task: TaskMessage,
@@ -15,29 +24,40 @@ pub struct WebsocketMessage {
 #[serde(rename_all = "snake_case")]
 pub enum WebsocketSystems {
     PythonRepo,
+    PcUsage,
 }
 
 /// Messages that represent tasks.
-#[derive(Debug, Clone, Deserialize, actix::Message)]
+#[derive(Debug, Clone, actix::Message)]
 #[rtype(result = "()")]
 pub struct TaskMessage {
     pub name: String,
     pub payload: TaskPayload,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct TaskPayload {
-    #[serde(skip)]
-    pub id: Option<Uuid>,
+    pub id: Uuid,
     pub data: serde_json::Value,
 }
 
 impl WebsocketMessage {
     pub fn parse(id: Uuid, message: &str) -> Result<Self, WebsocketError> {
-        let mut message = serde_json::from_str::<WebsocketMessage>(message)
+        let raw = serde_json::from_str::<RawWebsocketMessage>(message)
             .context("Failed to deserialize message.")
             .map_err(WebsocketError::MessageParseError)?;
-        message.task.payload.id = Some(id);
+
+        let message = Self {
+            system: raw.system,
+            task: TaskMessage {
+                name: raw.task,
+                payload: TaskPayload {
+                    id,
+                    data: raw.payload,
+                },
+            },
+        };
+
         Ok(message)
     }
 }
@@ -103,13 +123,9 @@ mod tests {
     fn correctly_deserialize_websocket_message() {
         let message = serde_json::json!({
             "system": "python_repo",
-            "task": {
-                "name": "get_files",
-                "payload": {"data": "tests/examples"}
-            }
+            "task": "some_task",
         });
-        let message = serde_json::from_value::<WebsocketMessage>(message).unwrap();
+        let message = serde_json::from_value::<RawWebsocketMessage>(message).unwrap();
         assert_eq!(WebsocketSystems::PythonRepo, message.system);
-        assert_eq!(None, message.task.payload.id);
     }
 }

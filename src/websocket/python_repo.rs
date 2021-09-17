@@ -106,9 +106,6 @@ impl TryFrom<TaskPayload> for GetFiles {
     type Error = WebsocketError;
 
     fn try_from(payload: TaskPayload) -> Result<Self, Self::Error> {
-        let id = payload.id.ok_or_else(|| {
-            WebsocketError::MessageParseError(anyhow::anyhow!("No `id` found on payload."))
-        })?;
         let path = payload
             .data
             .as_str()
@@ -116,7 +113,10 @@ impl TryFrom<TaskPayload> for GetFiles {
                 WebsocketError::MessageParseError(anyhow::anyhow!("No `path` found on payload."))
             })?
             .into();
-        Ok(Self { id, path })
+        Ok(Self {
+            id: payload.id,
+            path,
+        })
     }
 }
 
@@ -148,19 +148,17 @@ impl Handler<GetFiles> for PythonRepoSystem {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::websocket::message::WebsocketMessage;
+    use crate::websocket::message::RawWebsocketMessage;
 
     #[test]
     fn correctly_deserialize_task_name() {
         let message = serde_json::json!({
             "system": "python_repo",
-            "task": {
-                "name": "get_files",
-                "payload": {"data": "tests/examples"}
-            }
+            "task": "get_files",
+            "payload": "tests/examples"
         });
-        let message = serde_json::from_value::<WebsocketMessage>(message).unwrap();
-        let task = serde_json::from_str::<Tasks>(&format!("{:?}", message.task.name)).unwrap();
+        let message = serde_json::from_value::<RawWebsocketMessage>(message).unwrap();
+        let task = serde_json::from_str::<Tasks>(&format!("{:?}", message.task)).unwrap();
         assert_eq!(Tasks::GetFiles, task);
     }
 }

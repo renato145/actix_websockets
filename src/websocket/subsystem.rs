@@ -76,9 +76,7 @@ pub trait WebsocketSubSystem {
             .map_err(|e| e.into());
 
         if let Err(e) = &task {
-            if let Some(id) = task_message.payload.id {
-                self.send_error(id, e);
-            }
+            self.send_error(task_message.payload.id, e);
         }
 
         task

@@ -1,5 +1,6 @@
 use super::{
     message::{ClientMessage, Connect, WebsocketMessage},
+    pc_usage::PcUsageSystem,
     python_repo::PythonRepoSystem,
 };
 use crate::{configuration::WebsocketSettings, websocket::message::WebsocketSystems};
@@ -14,18 +15,20 @@ use uuid::Uuid;
 
 #[tracing::instrument(
     name = "Starting web socket",
-    skip(req, stream, websocket_settings, python_repo_system)
+    skip(req, stream, websocket_settings, python_repo_system, pc_usage_system)
 )]
 pub async fn ws_index(
     req: HttpRequest,
     stream: web::Payload,
     websocket_settings: web::Data<WebsocketSettings>,
     python_repo_system: web::Data<Addr<PythonRepoSystem>>,
+    pc_usage_system: web::Data<Addr<PcUsageSystem>>,
 ) -> Result<HttpResponse, actix_web::Error> {
     let resp = ws::start(
         WebsocketSystem::new(
             websocket_settings.as_ref(),
             python_repo_system.get_ref().clone(),
+            pc_usage_system.get_ref().clone(),
         ),
         &req,
         stream,
@@ -38,15 +41,21 @@ struct WebsocketSystem {
     hb: Instant,
     settings: WebsocketSettings,
     python_repo_system: Addr<PythonRepoSystem>,
+    pc_usage_system: Addr<PcUsageSystem>,
 }
 
 impl WebsocketSystem {
-    fn new(settings: &WebsocketSettings, python_repo_system: Addr<PythonRepoSystem>) -> Self {
+    fn new(
+        settings: &WebsocketSettings,
+        python_repo_system: Addr<PythonRepoSystem>,
+        pc_usage_system: Addr<PcUsageSystem>,
+    ) -> Self {
         Self {
             id: Uuid::new_v4(),
             hb: Instant::now(),
             settings: settings.clone(),
             python_repo_system,
+            pc_usage_system,
         }
     }
 
@@ -76,6 +85,7 @@ impl WebsocketSystem {
                 tracing::Span::current().record("parsed_message", &tracing::field::debug(&message));
                 match message.system {
                     WebsocketSystems::PythonRepo => self.python_repo_system.do_send(message.task),
+                    WebsocketSystems::PcUsage => self.pc_usage_system.do_send(message.task),
                 }
             }
             Err(e) => {
@@ -102,6 +112,22 @@ impl Actor for WebsocketSystem {
             .then(|res, _act, ctx| {
                 if let Err(e) = res {
                     tracing::error!("Failed to connect to PythonRepoSystem: {:?}", e);
+                    ctx.stop();
+                }
+                actix::fut::ready(())
+            })
+            .wait(ctx);
+
+        // Register to PythonRepoSystem
+        self.pc_usage_system
+            .send(Connect {
+                id: self.id,
+                addr: ctx.address().recipient(),
+            })
+            .into_actor(self)
+            .then(|res, _act, ctx| {
+                if let Err(e) = res {
+                    tracing::error!("Failed to connect to PcUsageSystem: {:?}", e);
                     ctx.stop();
                 }
                 actix::fut::ready(())

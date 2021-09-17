@@ -7,10 +7,9 @@ async fn get_files_receive_python_files_on_valid_path() {
     let app = spawn_app().await;
     let message = serde_json::json!({
         "system": "python_repo",
-        "task": {
-            "name": "get_files",
-            "payload": {"data": "tests/examples"}
-        }
+        "task": "get_files",
+        "payload": "tests/examples"
+
     })
     .to_string();
 
@@ -33,10 +32,8 @@ async fn get_files_receive_error_on_invalid_path() {
     let app = spawn_app().await;
     let message = serde_json::json!({
         "system": "python_repo",
-        "task": {
-            "name": "get_files",
-            "payload": {"data": "tests/some_incorrect_path"}
-        }
+        "task": "get_files",
+        "payload": "tests/some_incorrect_path"
     })
     .to_string();
 
@@ -54,10 +51,7 @@ async fn receive_error_on_invalid_task_name() {
     let app = spawn_app().await;
     let message = serde_json::json!({
         "system": "python_repo",
-        "task": {
-            "name": "invalid_task_name",
-            "payload": {"data": "tests/some_incorrect_path"}
-        }
+        "task": "invalid_task_name"
     })
     .to_string();
 

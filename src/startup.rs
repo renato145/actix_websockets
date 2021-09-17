@@ -1,6 +1,6 @@
 use crate::{
     configuration::{Settings, WebsocketSettings},
-    websocket::{python_repo::PythonRepoSystem, route::ws_index},
+    websocket::{pc_usage::PcUsageSystem, python_repo::PythonRepoSystem, route::ws_index},
 };
 use actix::Actor;
 use actix_web::{
@@ -41,12 +41,14 @@ pub fn run(
     tracing::info!("{:?}", websocket_settings);
     let websocket_settings = Data::new(websocket_settings);
     let python_repo_server = Data::new(PythonRepoSystem::default().start());
+    let pc_usage_server = Data::new(PcUsageSystem::default().start());
     let server = HttpServer::new(move || {
         App::new()
             .wrap(TracingLogger::default())
             .route("/ws/", web::get().to(ws_index))
             .app_data(websocket_settings.clone())
             .app_data(python_repo_server.clone())
+            .app_data(pc_usage_server.clone())
     })
     .listen(listener)?
     .run();
