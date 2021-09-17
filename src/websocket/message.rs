@@ -19,7 +19,7 @@ pub enum WebsocketSystems {
 
 /// Messages that represent tasks.
 #[derive(Debug, Deserialize, actix::Message)]
-#[rtype(result = "Result<(), WebsocketError>")]
+#[rtype(result = "()")]
 pub struct TaskMessage {
     pub name: String,
     pub payload: TaskPayload,

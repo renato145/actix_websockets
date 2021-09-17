@@ -45,9 +45,14 @@ impl Default for PythonRepoSystem {
 
 impl WebsocketSubSystem for PythonRepoSystem {
     type Error = PythonRepoError;
+    type Task = Tasks;
 
     fn get_address(&self, id: &Uuid) -> Option<&Recipient<ClientMessage>> {
         self.sessions.get(id)
+    }
+
+    fn system(&self) -> WebsocketSystems {
+        WebsocketSystems::PythonRepo
     }
 }
 
@@ -66,11 +71,12 @@ impl Handler<Connect> for PythonRepoSystem {
 
 /// Dispatcher for task handlers
 impl Handler<TaskMessage> for PythonRepoSystem {
-    type Result = Result<(), WebsocketError>;
+    type Result = ();
 
     #[tracing::instrument(name = "Handle task (PythonRepoSystem)", skip(self, ctx))]
     fn handle(&mut self, task: TaskMessage, ctx: &mut Self::Context) -> Self::Result {
         let addr = ctx.address();
+        // let task = self.task_from_message(task);
         let task_name = match serde_json::from_str::<Tasks>(&format!("{:?}", task.name))
             .context("Failed to deserialize task name.")
             .map_err(WebsocketError::MessageParseError)
@@ -80,16 +86,17 @@ impl Handler<TaskMessage> for PythonRepoSystem {
                 if let Some(id) = task.payload.id {
                     self.send_message(id, Err(PythonRepoError::UnexpectedError(e.into())));
                 }
-                return Ok(());
+                return;
             }
         };
 
         match task_name {
             Tasks::GetFiles => {
-                addr.do_send(GetFiles::try_from(task.payload)?);
+                if let Ok(task) = GetFiles::try_from(task.payload) {
+                    addr.do_send(task);
+                }
             }
         }
-        Ok(())
     }
 }
 
