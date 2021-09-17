@@ -1,7 +1,6 @@
+use super::message::{ClientMessage, ClientMessager};
 use actix::Recipient;
 use uuid::Uuid;
-
-use super::message::{ClientMessage, ClientMessager};
 
 pub trait WebsocketSubSystem {
     type Error;
