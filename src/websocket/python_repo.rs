@@ -1,9 +1,7 @@
 use super::{
     error::WebsocketError,
-    message::{
-        ClientMessage, ClientMessager, Connect, TaskMessage, TaskPayload, WebsocketSubSystem,
-        WebsocketSystems,
-    },
+    message::{ClientMessage, Connect, SubSystemPart, TaskMessage, TaskPayload, WebsocketSystems},
+    subsystem::WebsocketSubSystem,
 };
 use crate::error_chain_fmt;
 use actix::{Actor, AsyncContext, Handler, Message, Recipient};
@@ -27,7 +25,7 @@ impl std::fmt::Debug for PythonRepoError {
     }
 }
 
-impl WebsocketSubSystem for Result<serde_json::Value, PythonRepoError> {
+impl SubSystemPart for Result<serde_json::Value, PythonRepoError> {
     fn system(&self) -> Option<WebsocketSystems> {
         Some(WebsocketSystems::PythonRepo)
     }
@@ -45,21 +43,11 @@ impl Default for PythonRepoSystem {
     }
 }
 
-impl PythonRepoSystem {
-    /// Sends message to the main system.
-    #[tracing::instrument(name = "Sending message from PythonRepoSystem", skip(self))]
-    pub fn send_message(&self, id: Uuid, msg: Result<serde_json::Value, PythonRepoError>) {
-        match self.sessions.get(&id) {
-            Some(addr) => {
-                let message = msg.to_message();
-                if let Err(e) = addr.do_send(message) {
-                    tracing::error!("Failed to send message from PythonRepoSystem: {:?}", e);
-                }
-            }
-            None => {
-                tracing::error!("No address found for id: {:?}", id);
-            }
-        }
+impl WebsocketSubSystem for PythonRepoSystem {
+    type Error = PythonRepoError;
+
+    fn get_address(&self, id: &Uuid) -> Option<&Recipient<ClientMessage>> {
+        self.sessions.get(id)
     }
 }
 

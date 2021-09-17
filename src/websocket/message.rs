@@ -51,11 +51,11 @@ pub struct ClientMessage {
     pub payload: serde_json::Value,
 }
 
-pub trait WebsocketSubSystem {
+pub trait SubSystemPart {
     fn system(&self) -> Option<WebsocketSystems>;
 }
 
-pub trait ClientMessager: WebsocketSubSystem {
+pub trait ClientMessager: SubSystemPart {
     fn success(&self) -> bool;
     fn payload(self) -> serde_json::Value;
     fn to_message(self) -> ClientMessage
@@ -72,7 +72,7 @@ pub trait ClientMessager: WebsocketSubSystem {
 
 impl<E> ClientMessager for Result<serde_json::Value, E>
 where
-    Result<serde_json::Value, E>: WebsocketSubSystem,
+    Result<serde_json::Value, E>: SubSystemPart,
     E: std::error::Error,
 {
     fn success(&self) -> bool {

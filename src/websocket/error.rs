@@ -1,4 +1,4 @@
-use super::message::{ClientMessage, WebsocketSubSystem, WebsocketSystems};
+use super::message::{ClientMessage, SubSystemPart, WebsocketSystems};
 use crate::error_chain_fmt;
 
 #[derive(thiserror::Error)]
@@ -25,7 +25,7 @@ impl From<WebsocketError> for ClientMessage {
     }
 }
 
-impl WebsocketSubSystem for Result<serde_json::Value, WebsocketError> {
+impl SubSystemPart for Result<serde_json::Value, WebsocketError> {
     fn system(&self) -> Option<WebsocketSystems> {
         None
     }
