@@ -120,7 +120,7 @@ impl Handler<GetCpuLoad> for PcUsageSystem {
             .cpu_load()
             .context("Failed to read cpu load.")
             .map(|cpu| {
-                thread::sleep(std::time::Duration::from_millis(200));
+                thread::sleep(std::time::Duration::from_millis(200)); // TODO: This blocks the server
                 cpu.done().context("Failed to read cpu load.").map(|cpu| {
                     let result = cpu
                         .iter()
