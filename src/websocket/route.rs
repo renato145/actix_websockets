@@ -74,20 +74,13 @@ impl WebsocketSystem {
         });
     }
 
-    #[tracing::instrument(
-        name = "Process message",
-        skip(self, ctx),
-        fields(parsed_message=tracing::field::Empty)
-    )]
+    #[tracing::instrument(name = "Process message", skip(self, ctx))]
     fn process_message(&self, text: &str, ctx: &mut ws::WebsocketContext<WebsocketSystem>) {
         match WebsocketMessage::parse(self.id, text) {
-            Ok(message) => {
-                tracing::Span::current().record("parsed_message", &tracing::field::debug(&message));
-                match message.system {
-                    WebsocketSystems::PythonRepo => self.python_repo_system.do_send(message.task),
-                    WebsocketSystems::PcUsage => self.pc_usage_system.do_send(message.task),
-                }
-            }
+            Ok(message) => match message.system {
+                WebsocketSystems::PythonRepo => self.python_repo_system.do_send(message.task),
+                WebsocketSystems::PcUsage => self.pc_usage_system.do_send(message.task),
+            },
             Err(e) => {
                 tracing::error!("{:?}", e);
                 ctx.address().do_send(e.into());
