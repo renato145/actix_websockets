@@ -16,7 +16,6 @@ async fn cpu_load_receives_results() {
     let result = app.get_first_result(&message).await;
 
     // Assert
-    // tracing::info!("{:?}", result);
     assert_eq!(result.system.unwrap(), WebsocketSystems::PcUsage);
     assert!(result.success, "Call was not successful.");
     let payload = serde_json::from_value::<Vec<CpuLoadResult>>(result.payload)
